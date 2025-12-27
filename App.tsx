@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, RotateCw, X, Sun, Moon, Upload, LogOut } from 'lucide-react';
+import { Menu, RotateCw, X, Sun, Moon, Upload, LogOut, Loader2 } from 'lucide-react';
 import Calendar from './components/Calendar';
 import WodModal from './components/WodModal';
 import DateOptionsModal from './components/DateOptionsModal';
+import { AuthProvider, useAuth } from './components/AuthProvider';
+import LoginScreen from './components/LoginScreen';
+import { migrateLocalStorageToFirestore } from './services/storageService';
 
 type ModalType = 'none' | 'options' | 'editor';
 
-function App() {
+function AppContent() {
+  const { user, loading, signOut } = useAuth();
   const [rotation, setRotation] = useState(0);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [currentModal, setCurrentModal] = useState<ModalType>('none');
@@ -14,6 +18,28 @@ function App() {
   const [dataVersion, setDataVersion] = useState(0);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(true);
+  const [isMigrating, setIsMigrating] = useState(false);
+
+  // Run migration on first login
+  useEffect(() => {
+    if (user && !loading) {
+      const runMigration = async () => {
+        setIsMigrating(true);
+        try {
+          const count = await migrateLocalStorageToFirestore();
+          if (count > 0) {
+            console.log(`Migrated ${count} WODs from localStorage to Firestore`);
+            setDataVersion(prev => prev + 1);
+          }
+        } catch (err) {
+          console.error('Migration error:', err);
+        } finally {
+          setIsMigrating(false);
+        }
+      };
+      runMigration();
+    }
+  }, [user, loading]);
 
   const handleRotate = () => {
     setRotation((prev) => (prev + 90) % 360);
@@ -46,6 +72,43 @@ function App() {
   const handleSaveWod = () => {
     setDataVersion(prev => prev + 1);
   };
+
+  const handleSignOut = async () => {
+    setIsMenuOpen(false);
+    await signOut();
+  };
+
+  // Show loading spinner
+  if (loading) {
+    return (
+      <div className="min-h-screen w-full bg-wood-900 flex items-center justify-center">
+        <div className="absolute inset-0 bg-wood-pattern bg-cover opacity-20 pointer-events-none mix-blend-overlay"></div>
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 size={48} className="animate-spin text-neon-orange" />
+          <span className="text-white font-bold">Cargando...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Show login if not authenticated
+  if (!user) {
+    return <LoginScreen />;
+  }
+
+  // Show migration progress
+  if (isMigrating) {
+    return (
+      <div className="min-h-screen w-full bg-wood-900 flex items-center justify-center">
+        <div className="absolute inset-0 bg-wood-pattern bg-cover opacity-20 pointer-events-none mix-blend-overlay"></div>
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 size={48} className="animate-spin text-neon-orange" />
+          <span className="text-white font-bold">Migrando datos...</span>
+          <span className="text-gray-400 text-sm">Esto solo sucede una vez</span>
+        </div>
+      </div>
+    );
+  }
 
   // Determine container dimensions based on rotation to ensure fit
   const isVertical = rotation === 90 || rotation === 270;
@@ -91,6 +154,14 @@ function App() {
           {isMenuOpen && (
             <div className={`absolute top-14 right-0 border rounded-xl shadow-[0_0_30px_rgba(255,95,31,0.2)] backdrop-blur-md min-w-[220px] overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 ${isDarkMode ? 'bg-neutral-900/95 border-neon-orange/30' : 'bg-white/95 border-orange-200'}`}>
               <div className="py-2">
+                {/* User Email */}
+                <div className={`px-5 py-2 text-xs truncate ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  {user.email}
+                </div>
+
+                {/* Separator */}
+                <div className={`border-t my-1 ${isDarkMode ? 'border-white/10' : 'border-gray-200'}`}></div>
+
                 {/* Dark/Light Mode Toggle */}
                 <button
                   onClick={() => setIsDarkMode(!isDarkMode)}
@@ -123,10 +194,7 @@ function App() {
 
                 {/* Logout */}
                 <button
-                  onClick={() => {
-                    setIsMenuOpen(false);
-                    alert('Función de cierre de sesión próximamente');
-                  }}
+                  onClick={handleSignOut}
                   className="w-full flex items-center gap-3 px-5 py-3 text-left text-gray-400 hover:bg-red-900/10 hover:text-red-400 transition-colors"
                 >
                   <LogOut size={20} />
@@ -206,6 +274,14 @@ function App() {
         </div>
       )}
     </div>
+  );
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
 

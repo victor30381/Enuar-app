@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { DayCell } from '../types';
+import React, { useState, useEffect } from 'react';
+import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { DayCell, WodEntry } from '../types';
 import { getWods } from '../services/storageService';
 
 interface CalendarProps {
@@ -12,8 +12,26 @@ const Calendar: React.FC<CalendarProps> = ({ onDateSelect, isDarkMode = true }) 
   const currentDate = new Date();
   const [displayMonth, setDisplayMonth] = useState(currentDate.getMonth());
   const [displayYear, setDisplayYear] = useState(currentDate.getFullYear());
+  const [wods, setWods] = useState<WodEntry[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const monthName = new Date(displayYear, displayMonth).toLocaleString('es-ES', { month: 'long' }).toUpperCase();
+
+  // Load WODs from Firestore
+  useEffect(() => {
+    const loadWods = async () => {
+      setLoading(true);
+      try {
+        const data = await getWods();
+        setWods(data);
+      } catch (err) {
+        console.error('Error loading WODs:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadWods();
+  }, [displayMonth, displayYear]);
 
   const goToPrevMonth = () => {
     if (displayMonth === 0) {
@@ -33,8 +51,7 @@ const Calendar: React.FC<CalendarProps> = ({ onDateSelect, isDarkMode = true }) 
     }
   };
 
-  const days = useMemo(() => {
-    const wods = getWods();
+  const days = React.useMemo(() => {
     const result: DayCell[] = [];
 
     // First day of month
@@ -76,7 +93,7 @@ const Calendar: React.FC<CalendarProps> = ({ onDateSelect, isDarkMode = true }) 
     }
 
     return result;
-  }, [displayMonth, displayYear]);
+  }, [displayMonth, displayYear, wods]);
 
   return (
     <div className="w-full max-w-2xl mx-auto">
@@ -102,6 +119,12 @@ const Calendar: React.FC<CalendarProps> = ({ onDateSelect, isDarkMode = true }) 
           <ChevronRight size={40} />
         </button>
       </div>
+
+      {loading && (
+        <div className="flex justify-center py-4">
+          <Loader2 className="animate-spin text-neon-orange" size={24} />
+        </div>
+      )}
 
       <div className="grid grid-cols-7 gap-1 md:gap-2 mb-2">
         {['D', 'L', 'M', 'M', 'J', 'V', 'S'].map((d, i) => (

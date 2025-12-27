@@ -1,0 +1,13 @@
+
+# Compiled JavaScript files
+lib/
+lib-esm/
+
+# Node.js dependencies
+node_modules/
+
+# Logs
+firebase-debug.log*
+
+# Environment
+.env*

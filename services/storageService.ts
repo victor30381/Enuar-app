@@ -1,46 +1,155 @@
+import {
+  collection,
+  doc,
+  getDocs,
+  getDoc,
+  setDoc,
+  deleteDoc,
+  query,
+  where,
+  orderBy
+} from 'firebase/firestore';
+import { db, auth } from './firebase';
 import { WodEntry } from '../types';
 
-const STORAGE_KEY = 'ENUAR_WODS_DATA';
+// Helper to get current user ID
+const getUserId = (): string | null => {
+  return auth.currentUser?.uid || null;
+};
 
-export const getWods = (): WodEntry[] => {
+// Get user's WODs collection reference
+const getUserWodsCollection = () => {
+  const userId = getUserId();
+  if (!userId) throw new Error('User not authenticated');
+  return collection(db, 'users', userId, 'wods');
+};
+
+export const getWods = async (): Promise<WodEntry[]> => {
   try {
-    const data = localStorage.getItem(STORAGE_KEY);
-    return data ? JSON.parse(data) : [];
+    const userId = getUserId();
+    if (!userId) return [];
+
+    const wodsRef = getUserWodsCollection();
+    const q = query(wodsRef, orderBy('date', 'desc'));
+    const snapshot = await getDocs(q);
+
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    } as WodEntry));
   } catch (error) {
-    console.error("Error loading WODs", error);
+    console.error("Error loading WODs from Firestore:", error);
     return [];
   }
 };
 
-export const getWodsByDate = (dateIso: string): WodEntry[] => {
-  const wods = getWods();
-  return wods.filter(w => w.date === dateIso);
+export const getWodsByDate = async (dateIso: string): Promise<WodEntry[]> => {
+  try {
+    const userId = getUserId();
+    if (!userId) return [];
+
+    const wodsRef = getUserWodsCollection();
+    const q = query(wodsRef, where('date', '==', dateIso));
+    const snapshot = await getDocs(q);
+
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    } as WodEntry));
+  } catch (error) {
+    console.error("Error loading WODs by date:", error);
+    return [];
+  }
 };
 
-export const getWodById = (id: string): WodEntry | undefined => {
-  const wods = getWods();
-  return wods.find(w => w.id === id);
-};
+export const getWodById = async (id: string): Promise<WodEntry | undefined> => {
+  try {
+    const userId = getUserId();
+    if (!userId) return undefined;
 
-export const saveWod = (entry: WodEntry): void => {
-  const wods = getWods();
-  const existingIndex = wods.findIndex(w => w.id === entry.id);
+    const wodRef = doc(db, 'users', userId, 'wods', id);
+    const snapshot = await getDoc(wodRef);
 
-  if (existingIndex >= 0) {
-    wods[existingIndex] = entry;
-  } else {
-    // If no ID (shouldn't happen with proper logic but safe to handle) or new ID
-    if (!entry.id) {
-      entry.id = crypto.randomUUID();
+    if (snapshot.exists()) {
+      return {
+        id: snapshot.id,
+        ...snapshot.data()
+      } as WodEntry;
     }
-    wods.push(entry);
+    return undefined;
+  } catch (error) {
+    console.error("Error loading WOD by ID:", error);
+    return undefined;
+  }
+};
+
+export const saveWod = async (entry: WodEntry): Promise<void> => {
+  try {
+    const userId = getUserId();
+    if (!userId) throw new Error('User not authenticated');
+
+    const wodId = entry.id || crypto.randomUUID();
+    const wodRef = doc(db, 'users', userId, 'wods', wodId);
+
+    await setDoc(wodRef, {
+      ...entry,
+      id: wodId,
+      updatedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error("Error saving WOD:", error);
+    throw error;
+  }
+};
+
+export const deleteWod = async (id: string): Promise<void> => {
+  try {
+    const userId = getUserId();
+    if (!userId) throw new Error('User not authenticated');
+
+    const wodRef = doc(db, 'users', userId, 'wods', id);
+    await deleteDoc(wodRef);
+  } catch (error) {
+    console.error("Error deleting WOD:", error);
+    throw error;
+  }
+};
+
+// Migration: Move localStorage WODs to Firestore (run once on first login)
+export const migrateLocalStorageToFirestore = async (): Promise<number> => {
+  const STORAGE_KEY = 'ENUAR_WODS_DATA';
+  const MIGRATION_KEY = 'ENUAR_MIGRATION_COMPLETE';
+
+  // Check if migration already done
+  if (localStorage.getItem(MIGRATION_KEY)) {
+    return 0;
   }
 
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(wods));
-};
+  try {
+    const localData = localStorage.getItem(STORAGE_KEY);
+    if (!localData) {
+      localStorage.setItem(MIGRATION_KEY, 'true');
+      return 0;
+    }
 
-export const deleteWod = (id: string): void => {
-  const wods = getWods();
-  const newWods = wods.filter(w => w.id !== id);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(newWods));
+    const localWods: WodEntry[] = JSON.parse(localData);
+    if (localWods.length === 0) {
+      localStorage.setItem(MIGRATION_KEY, 'true');
+      return 0;
+    }
+
+    // Migrate each WOD to Firestore
+    for (const wod of localWods) {
+      await saveWod(wod);
+    }
+
+    // Mark migration complete
+    localStorage.setItem(MIGRATION_KEY, 'true');
+    console.log(`Migrated ${localWods.length} WODs to Firestore`);
+
+    return localWods.length;
+  } catch (error) {
+    console.error("Error migrating WODs:", error);
+    return 0;
+  }
 };

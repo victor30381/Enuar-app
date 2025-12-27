@@ -25,38 +25,126 @@ const WodModal: React.FC<WodModalProps> = ({ date, wodId, onClose, onSave }) => 
   const [isVerticalMode, setIsVerticalMode] = useState(false); // false = 16:9, true = 9:16
 
   const sectionsContainerRef = useRef<HTMLDivElement>(null);
+  const modalContainerRef = useRef<HTMLDivElement>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const fullscreenContainerRef = useRef<HTMLDivElement | null>(null);
 
+  // Create fullscreen container on mount
   useEffect(() => {
-    if (wodId) {
-      const existingWod = getWodById(wodId);
-      if (existingWod) {
-        setTitle(existingWod.title);
-        // Ensure sections are loaded, even if empty array in storage
-        if (existingWod.sections && existingWod.sections.length > 0) {
-          setSections(existingWod.sections);
-          setActiveSectionId(existingWod.sections[0].id);
-        } else if (existingWod.content) {
-          // Backward compatibility: wrap legacy content in a default section
-          const newId = crypto.randomUUID();
-          setSections([{
-            id: newId,
-            title: 'WOD',
-            content: existingWod.content
-          }]);
-          setActiveSectionId(newId);
-        } else {
-          setSections([]);
-          setActiveSectionId('');
+    const container = document.createElement('div');
+    container.id = 'wod-fullscreen-container';
+    container.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999; display: none; background: black;';
+    document.body.appendChild(container);
+    fullscreenContainerRef.current = container;
+
+    return () => {
+      container.remove();
+    };
+  }, []);
+
+  // Toggle true browser fullscreen
+  const toggleFullscreen = async () => {
+    const container = fullscreenContainerRef.current;
+    if (!container) return;
+
+    if (!isFullscreen) {
+      // Enter fullscreen
+      try {
+        container.style.display = 'flex';
+        container.style.alignItems = 'center';
+        container.style.justifyContent = 'center';
+
+        if (container.requestFullscreen) {
+          await container.requestFullscreen();
+        } else if ((container as any).webkitRequestFullscreen) {
+          await (container as any).webkitRequestFullscreen();
+        } else if ((container as any).msRequestFullscreen) {
+          await (container as any).msRequestFullscreen();
         }
+        setIsFullscreen(true);
+      } catch (err) {
+        console.error('Error entering fullscreen:', err);
+        // Fallback to CSS fullscreen
+        setIsFullscreen(true);
       }
     } else {
-      setTitle(`WOD ${date.toLocaleDateString()}`);
-      // Reset to default new state: No sections
-      setSections([]);
-      setActiveSectionId('');
+      // Exit fullscreen
+      try {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        } else if ((document as any).webkitExitFullscreen) {
+          await (document as any).webkitExitFullscreen();
+        } else if ((document as any).msExitFullscreen) {
+          await (document as any).msExitFullscreen();
+        }
+      } catch (err) {
+        console.error('Error exiting fullscreen:', err);
+      }
+      container.style.display = 'none';
+      setIsFullscreen(false);
     }
+  };
+
+  // Listen for fullscreen changes (e.g., user presses Escape)
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const isCurrentlyFullscreen = !!(
+        document.fullscreenElement ||
+        (document as any).webkitFullscreenElement ||
+        (document as any).msFullscreenElement
+      );
+
+      if (!isCurrentlyFullscreen && fullscreenContainerRef.current) {
+        fullscreenContainerRef.current.style.display = 'none';
+      }
+
+      setIsFullscreen(isCurrentlyFullscreen);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('msfullscreenchange', handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('msfullscreenchange', handleFullscreenChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    const loadWod = async () => {
+      if (wodId) {
+        const existingWod = await getWodById(wodId);
+        if (existingWod) {
+          setTitle(existingWod.title);
+          // Ensure sections are loaded, even if empty array in storage
+          if (existingWod.sections && existingWod.sections.length > 0) {
+            setSections(existingWod.sections);
+            setActiveSectionId(existingWod.sections[0].id);
+          } else if (existingWod.content) {
+            // Backward compatibility: wrap legacy content in a default section
+            const newId = crypto.randomUUID();
+            setSections([{
+              id: newId,
+              title: 'WOD',
+              content: existingWod.content
+            }]);
+            setActiveSectionId(newId);
+          } else {
+            setSections([]);
+            setActiveSectionId('');
+          }
+        }
+      } else {
+        setTitle(`WOD ${date.toLocaleDateString()}`);
+        // Reset to default new state: No sections
+        setSections([]);
+        setActiveSectionId('');
+      }
+    };
+    loadWod();
   }, [wodId, date]);
 
   // Ensure active section is valid
@@ -99,7 +187,7 @@ const WodModal: React.FC<WodModalProps> = ({ date, wodId, onClose, onSave }) => 
     }
   }, [focusedSectionIndex, isFullscreen]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     // Legacy content fallback: join sections
     const legacyContent = sections.map(s => `### ${s.title}\n${s.content}`).join('\n\n');
 
@@ -110,14 +198,14 @@ const WodModal: React.FC<WodModalProps> = ({ date, wodId, onClose, onSave }) => 
       content: legacyContent,
       sections: sections
     };
-    saveWod(entry);
+    await saveWod(entry);
     onSave();
     onClose();
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (wodId) {
-      deleteWod(wodId);
+      await deleteWod(wodId);
       onSave();
       onClose();
     }
@@ -248,13 +336,14 @@ const WodModal: React.FC<WodModalProps> = ({ date, wodId, onClose, onSave }) => 
 
   const modalContent = (
     <div
+      ref={modalContainerRef}
       className={`bg-neutral-900 border border-neon-orange rounded-xl shadow-[0_0_40px_rgba(255,95,31,0.25)] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200 transition-all
             ${isFullscreen ? 'fixed inset-0 z-[9999] w-screen h-screen rounded-none' : 'w-[90vw] max-w-3xl h-[85vh]'}
         `}
     >
 
-      {/* Header */}
-      <div className={`px-5 py-3 border-b border-neutral-800 flex justify-between items-center bg-wood-800 shrink-0 ${isFullscreen ? 'bg-black border-none' : ''}`}>
+      {/* Header - z-50 ensures it stays above rotated content in presentation mode */}
+      <div className={`px-5 py-3 border-b border-neutral-800 flex justify-between items-center bg-wood-800 shrink-0 ${isFullscreen ? 'bg-black border-none z-50 relative' : ''}`}>
         <div className="flex items-center gap-2">
           {!isFullscreen && (
             <>
@@ -276,7 +365,11 @@ const WodModal: React.FC<WodModalProps> = ({ date, wodId, onClose, onSave }) => 
           {/* 360 Rotation Button - Toggle 16:9 / 9:16 */}
           {isFullscreen && (
             <button
-              onClick={() => setIsVerticalMode(!isVerticalMode)}
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                setIsVerticalMode(prev => !prev);
+              }}
               className={`group flex flex-col items-center justify-center transition-colors ${isVerticalMode ? 'text-neon-orange' : 'text-white/50 hover:text-neon-orange'}`}
               title={isVerticalMode ? "Cambiar a 16:9 (Horizontal)" : "Cambiar a 9:16 (Vertical)"}
             >
@@ -287,7 +380,7 @@ const WodModal: React.FC<WodModalProps> = ({ date, wodId, onClose, onSave }) => 
             </button>
           )}
           <button
-            onClick={() => setIsFullscreen(!isFullscreen)}
+            onClick={toggleFullscreen}
             className={`text-gray-500 hover:text-neon-orange transition-colors p-1 ${isFullscreen ? 'text-white/50 hover:text-white hover:scale-110' : ''}`}
             title={isFullscreen ? "Salir de Modo Presentación" : "Modo Presentación"}
           >
@@ -317,35 +410,39 @@ const WodModal: React.FC<WodModalProps> = ({ date, wodId, onClose, onSave }) => 
         {/* --- PRESENTATION MODE --- */}
         {isFullscreen ? (
           <div
-            className={`mx-auto space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500 transition-all ${isVerticalMode ? 'fixed top-1/2 left-1/2' : 'w-full max-w-6xl'}`}
+            className={`mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 transition-all ${isVerticalMode ? 'fixed z-40 overflow-y-auto bg-black p-6' : 'w-full max-w-6xl'}`}
             style={isVerticalMode ? {
-              transform: 'translate(-50%, -50%) rotate(90deg)',
-              width: '100vh',
-              maxWidth: '100vh',
+              transform: 'rotate(90deg)',
+              width: '85vh',
+              height: '90vw',
+              top: '50%',
+              left: '50%',
+              marginTop: '-45vw',
+              marginLeft: '-42.5vh',
               transformOrigin: 'center center'
             } : undefined}
           >
             {/* Main Title */}
-            <div className="text-center border-b-2 border-neon-orange/30 pb-8">
-              <h1 className="text-5xl md:text-7xl font-display text-white tracking-tight uppercase drop-shadow-[0_0_15px_rgba(255,255,255,0.1)]">
+            <div className={`text-center border-b-2 border-neon-orange/30 ${isVerticalMode ? 'pb-4' : 'pb-8'}`}>
+              <h1 className={`font-display text-white tracking-tight uppercase drop-shadow-[0_0_15px_rgba(255,255,255,0.1)] ${isVerticalMode ? 'text-5xl' : 'text-5xl md:text-7xl'}`}>
                 {title || 'SIN TÍTULO'}
               </h1>
             </div>
 
             {/* Sections Grid */}
-            <div ref={sectionsContainerRef} className="grid grid-cols-1 gap-12 pb-40">
+            <div ref={sectionsContainerRef} className={`grid grid-cols-1 ${isVerticalMode ? 'gap-6 pb-20' : 'gap-12 pb-40'}`}>
               {sections.map((section, index) => {
                 const isFocused = index === focusedSectionIndex;
                 return (
                   <div
                     key={section.id}
                     onClick={() => setFocusedSectionIndex(index)}
-                    className={`space-y-4 p-8 rounded-3xl transition-all duration-500 transform-gpu cursor-pointer border ${isFocused ? 'bg-neon-orange shadow-[0_0_60px_rgba(255,95,31,0.4)] scale-105 z-10 border-neon-orange' : 'opacity-30 scale-95 border-white/5 hover:opacity-50 hover:scale-100'}`}
+                    className={`space-y-2 ${isVerticalMode ? 'p-4' : 'p-8'} rounded-3xl transition-all duration-500 transform-gpu cursor-pointer border ${isFocused ? 'bg-neon-orange shadow-[0_0_60px_rgba(255,95,31,0.4)] scale-105 z-10 border-neon-orange' : 'opacity-30 scale-95 border-white/5 hover:opacity-50 hover:scale-100'}`}
                   >
-                    <h3 className={`text-2xl md:text-4xl font-display tracking-widest uppercase border-l-8 pl-6 transition-colors duration-500 ${isFocused ? 'text-white border-white/80' : 'text-neon-orange border-neon-orange'}`}>
+                    <h3 className={`font-display tracking-widest uppercase border-l-8 ${isVerticalMode ? 'text-2xl pl-4 border-l-4' : 'text-2xl md:text-4xl pl-6'} transition-colors duration-500 ${isFocused ? 'text-white border-white/80' : 'text-neon-orange border-neon-orange'}`}>
                       {section.title}
                     </h3>
-                    <div className={`text-xl md:text-2xl font-mono leading-relaxed pl-8 transition-colors duration-500 ${isFocused ? 'text-white font-semibold' : 'text-gray-400'}`}>
+                    <div className={`font-mono leading-relaxed ${isVerticalMode ? 'text-lg pl-4' : 'text-xl md:text-2xl pl-8'} transition-colors duration-500 ${isFocused ? 'text-white font-semibold' : 'text-gray-400'}`}>
                       {section.content.split('\n').map((line, i) => {
                         const trimmed = line.trim();
                         // Remove explanations in parentheses
@@ -353,8 +450,8 @@ const WodModal: React.FC<WodModalProps> = ({ date, wodId, onClose, onSave }) => 
                         if (!cleanLine) return null; // Skip empty lines after cleaning
                         if (cleanLine.startsWith('-')) {
                           return (
-                            <div key={i} className="flex items-start gap-4 mb-1">
-                              <span className={`font-bold shrink-0 min-w-[20px] text-2xl mt-1 ${isFocused ? 'text-white' : 'text-neon-orange'}`}>-</span>
+                            <div key={i} className={`flex items-start ${isVerticalMode ? 'gap-2' : 'gap-4'} mb-1`}>
+                              <span className={`font-bold shrink-0 ${isVerticalMode ? 'text-lg' : 'text-2xl min-w-[20px] mt-1'} ${isFocused ? 'text-white' : 'text-neon-orange'}`}>-</span>
                               <span>{cleanLine.substring(1).trim()}</span>
                             </div>
                           );
@@ -504,8 +601,9 @@ const WodModal: React.FC<WodModalProps> = ({ date, wodId, onClose, onSave }) => 
     </div>
   );
 
-  if (isFullscreen) {
-    return createPortal(modalContent, document.body);
+  // When in fullscreen, render via portal to the dedicated fullscreen container
+  if (isFullscreen && fullscreenContainerRef.current) {
+    return createPortal(modalContent, fullscreenContainerRef.current);
   }
 
   return modalContent;

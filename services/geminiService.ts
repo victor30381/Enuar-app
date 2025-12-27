@@ -1,8 +1,14 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY || '');
+// Use environment variable for API Key
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
+const genAI = new GoogleGenerativeAI(apiKey);
 
 export const generateWod = async (prompt?: string): Promise<string> => {
+  if (!apiKey) {
+    return "Error: API Key no configurada.";
+  }
+
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
 
@@ -30,18 +36,21 @@ export const generateWod = async (prompt?: string): Promise<string> => {
 };
 
 export const parseWodContent = async (base64OrText: string, mimeType: string): Promise<any> => {
+  if (!apiKey) {
+    throw new Error("API Key no configurada.");
+  }
+
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
 
     const isText = mimeType.startsWith('text/') || mimeType === 'application/json';
-
     let contentParts: any[] = [];
 
     if (isText) {
       contentParts = [base64OrText];
     } else {
-      // SDK expects simple inlineData object
-      const base64Data = base64OrText.split(',')[1] || base64OrText;
+      // Clean base64 string if needed
+      const base64Data = base64OrText.includes(',') ? base64OrText.split(',')[1] : base64OrText;
       contentParts = [
         {
           inlineData: {
@@ -75,12 +84,12 @@ export const parseWodContent = async (base64OrText: string, mimeType: string): P
 
     const result = await model.generateContent([prompt, ...contentParts]);
     const text = result.response.text();
-
     const jsonString = text.replace(/```json/g, '').replace(/```/g, '').trim();
+
     return JSON.parse(jsonString);
 
   } catch (error) {
-    console.error("Gemini Content Error:", error);
+    console.error("Gemini Parse Error:", error);
     throw new Error("Failed to parse WOD content");
   }
 };

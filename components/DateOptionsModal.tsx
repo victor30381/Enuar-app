@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from 'react';
-import { Plus, X, Dumbbell, Calendar } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, X, Dumbbell, Calendar, Loader2 } from 'lucide-react';
 import { getWodsByDate } from '../services/storageService';
+import { WodEntry } from '../types';
 
 interface DateOptionsModalProps {
   date: Date;
@@ -11,8 +12,26 @@ interface DateOptionsModalProps {
 
 const DateOptionsModal: React.FC<DateOptionsModalProps> = ({ date, onClose, onNewWod, onEditWod }) => {
   const [selectedDate, setSelectedDate] = useState(date);
+  const [wods, setWods] = useState<WodEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+
   const dateIso = selectedDate.toISOString().split('T')[0];
-  const wods = useMemo(() => getWodsByDate(dateIso), [dateIso]);
+
+  // Load WODs for selected date
+  useEffect(() => {
+    const loadWods = async () => {
+      setLoading(true);
+      try {
+        const data = await getWodsByDate(dateIso);
+        setWods(data);
+      } catch (err) {
+        console.error('Error loading WODs:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadWods();
+  }, [dateIso]);
 
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newDate = new Date(e.target.value + 'T12:00:00');
@@ -55,8 +74,15 @@ const DateOptionsModal: React.FC<DateOptionsModalProps> = ({ date, onClose, onNe
           </span>
         </div>
 
+        {/* Loading indicator */}
+        {loading && (
+          <div className="flex justify-center py-2">
+            <Loader2 className="animate-spin text-neon-orange" size={24} />
+          </div>
+        )}
+
         {/* Existing WODs for selected date */}
-        {wods.length > 0 && (
+        {!loading && wods.length > 0 && (
           <div className="flex flex-col gap-2">
             <span className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-1">Entrenamientos en esta fecha:</span>
             {wods.map(wod => (

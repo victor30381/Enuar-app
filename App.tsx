@@ -114,7 +114,7 @@ function AppContent() {
   const isVertical = rotation === 90 || rotation === 270;
 
   return (
-    <div className={`relative min-h-screen w-full flex items-center justify-center overflow-hidden transition-colors duration-500 ${isDarkMode ? 'bg-wood-900' : 'bg-gradient-to-br from-orange-50 via-white to-amber-50'}`}>
+    <div className={`relative h-screen w-full flex items-center justify-center overflow-hidden transition-colors duration-500 ${isDarkMode ? 'bg-wood-900' : 'bg-gradient-to-br from-orange-50 via-white to-amber-50'}`}>
       {/* Background Texture Overlay */}
       {isDarkMode ? (
         <>
@@ -222,10 +222,12 @@ function AppContent() {
       >
         {/* Header / Logo */}
         <div className="absolute top-10 left-10 md:left-20 text-left z-20">
-          <div className={`font-display text-6xl md:text-7xl leading-none tracking-tighter inline-block drop-shadow-lg ${isDarkMode ? 'text-white shadow-black' : 'text-gray-800'}`}>
-            ENU<span className="text-neon-orange neon-text">AR</span>
-          </div>
-          <div className={`font-bold tracking-[0.5em] text-sm md:text-lg ml-1 text-center opacity-80 ${isDarkMode ? 'text-white' : 'text-gray-600'}`}>
+          <img
+            src="logo.png"
+            alt="ENUAR W.O.D"
+            className={`w-36 md:w-48 drop-shadow-2xl ${isDarkMode ? 'shadow-black' : ''}`}
+          />
+          <div className={`font-bold tracking-[0.5em] text-sm md:text-lg ml-1 text-center opacity-80 mt-2 ${isDarkMode ? 'text-white' : 'text-gray-600'}`}>
             W.O.D
           </div>
         </div>
@@ -233,7 +235,7 @@ function AppContent() {
         {/* Content */}
         <div className="w-full max-w-4xl z-10 mt-20 md:mt-0">
           {/* Key prop ensures calendar refreshes when dataVersion changes */}
-          <Calendar key={dataVersion} onDateSelect={handleDateSelect} isDarkMode={isDarkMode} />
+          <Calendar key={dataVersion} onDateSelect={handleDateSelect} isDarkMode={isDarkMode} isVertical={isVertical} />
         </div>
 
 

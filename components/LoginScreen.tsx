@@ -63,13 +63,15 @@ const LoginScreen: React.FC = () => {
 
             <div className="relative z-10 w-full max-w-md">
                 {/* Logo */}
-                <div className="text-center mb-8">
-                    <div className="font-display text-6xl md:text-7xl leading-none tracking-tighter inline-block drop-shadow-lg text-white">
-                        ENU<span className="text-neon-orange neon-text">AR</span>
-                    </div>
-                    <div className="font-bold tracking-[0.5em] text-sm md:text-lg text-white opacity-80">
-                        W.O.D
-                    </div>
+                <div className="text-center mb-8 flex justify-center">
+                    <img
+                        src="logo.png"
+                        alt="ENUAR W.O.D"
+                        className="w-48 drop-shadow-2xl shadow-black"
+                    />
+                </div>
+                <div className="font-bold tracking-[0.5em] text-sm md:text-lg text-white opacity-80 text-center -mt-6 mb-8">
+                    W.O.D
                 </div>
 
                 {/* Login Card */}

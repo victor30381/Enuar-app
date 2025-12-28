@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Save, Trash2, Upload, Type, Plus, Maximize2, Minimize2, Image as ImageIcon, Zap, RotateCw } from 'lucide-react';
+import { X, Save, Trash2, Upload, Type, Plus, Maximize2, Minimize2, Image as ImageIcon, Zap, RotateCw, Copy, Clipboard, Eye, EyeOff } from 'lucide-react';
 import { WodEntry, WodSection } from '../types';
 import { saveWod, getWodById, deleteWod } from '../services/storageService';
-import { parseWodContent } from '../services/geminiService';
+
 
 interface WodModalProps {
   date: Date;
@@ -19,15 +19,16 @@ const WodModal: React.FC<WodModalProps> = ({ date, wodId, onClose, onSave }) => 
   const [sections, setSections] = useState<WodSection[]>([]);
   const [activeSectionId, setActiveSectionId] = useState<string>('');
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isParsing, setIsParsing] = useState(false);
-  const [rawText, setRawText] = useState('');
+
+
   const [focusedSectionIndex, setFocusedSectionIndex] = useState(0);
   const [isVerticalMode, setIsVerticalMode] = useState(false); // false = 16:9, true = 9:16
+  const [viewAllMode, setViewAllMode] = useState(false);
 
   const sectionsContainerRef = useRef<HTMLDivElement>(null);
   const modalContainerRef = useRef<HTMLDivElement>(null);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const fullscreenContainerRef = useRef<HTMLDivElement | null>(null);
 
   // Create fullscreen container on mount
@@ -232,105 +233,77 @@ const WodModal: React.FC<WodModalProps> = ({ date, wodId, onClose, onSave }) => 
     ));
   };
 
-  const handleSmartImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
 
-    setIsParsing(true);
-    const reader = new FileReader();
 
-    reader.onload = async (e) => {
-      const content = e.target?.result as string;
-      try {
-        // Determine mimeType for the API
-        let mimeType = file.type;
-        // Fallback for some windows file types or if empty
-        if (!mimeType) {
-          if (file.name.endsWith('.pdf')) mimeType = 'application/pdf';
-          else if (file.name.endsWith('.txt')) mimeType = 'text/plain';
-          else if (file.name.endsWith('.md')) mimeType = 'text/markdown';
-          else if (file.name.endsWith('.json')) mimeType = 'application/json';
-        }
 
-        const result = await parseWodContent(content, mimeType);
-        if (result) {
-          if (result.title) setTitle(result.title);
-          if (result.sections && Array.isArray(result.sections)) {
-            // Always append sections or replace? 
-            // User said "lo cargue ya con las secciones divididas"
-            // Strategy: If current is empty, set. If not, append.
-            const newSections = result.sections.map((s: any) => ({
-              id: crypto.randomUUID(),
-              title: s.title || 'Sección',
-              content: s.content || ''
-            }));
 
-            setSections(prev => {
-              // Use a functional update to avoid stale state
-              // If we have only 1 empty section (default), replace it
-              if (prev.length === 0 || (prev.length === 1 && !prev[0].title && !prev[0].content)) {
-                return newSections;
-              }
-              return [...prev, ...newSections];
-            });
-
-            if (newSections.length > 0) setActiveSectionId(newSections[0].id);
-          }
-        }
-      } catch (err: any) {
-        console.error(err);
-        if (err.message?.includes('429') || err.message?.includes('Quota')) {
-          alert("⏳ Límite de uso de IA alcanzado. Por favor espera 1 minuto y prueba de nuevo.");
-        } else {
-          alert("Error al analizar el archivo. Intenta nuevamente.");
-        }
-      } finally {
-        setIsParsing(false);
-      }
+  const handleCopyWod = () => {
+    const wodData = {
+      title,
+      sections
     };
-
-    if (file.type.startsWith('image/') || file.type === 'application/pdf') {
-      reader.readAsDataURL(file);
-    } else {
-      reader.readAsText(file);
-    }
-    event.target.value = '';
+    localStorage.setItem('copiedWodData', JSON.stringify(wodData));
+    alert('✅ WOD copiado al portapapeles');
   };
 
-  const handleTextImport = async () => {
-    if (!rawText.trim()) return;
-    setIsParsing(true);
+  const handlePasteWod = () => {
+    const savedData = localStorage.getItem('copiedWodData');
+    if (!savedData) {
+      alert('⚠️ No hay WOD copiado para pegar.');
+      return;
+    }
+
     try {
-      const result = await parseWodContent(rawText, 'text/plain');
-      if (result) {
-        if (result.title) setTitle(result.title);
-        if (result.sections && Array.isArray(result.sections)) {
-          const newSections = result.sections.map((s: any) => ({
-            id: crypto.randomUUID(),
-            title: s.title || 'Sección',
-            content: s.content || ''
-          }));
+      const parsedData = JSON.parse(savedData);
+      if (parsedData.title) setTitle(parsedData.title);
+      if (parsedData.sections && Array.isArray(parsedData.sections)) {
+        const newSections = parsedData.sections.map((s: any) => ({
+          ...s,
+          id: crypto.randomUUID() // Generate new IDs to avoid conflicts
+        }));
 
-          setSections(prev => {
-            if (prev.length === 0 || (prev.length === 1 && !prev[0].title && !prev[0].content)) {
-              return newSections;
-            }
-            return [...prev, ...newSections];
-          });
+        setSections(prev => {
+          if (prev.length === 0 || (prev.length === 1 && !prev[0].title && !prev[0].content)) {
+            return newSections;
+          }
+          return [...prev, ...newSections];
+        });
 
-          if (newSections.length > 0) setActiveSectionId(newSections[0].id);
-          setRawText(''); // Clear after success
-        }
+        if (newSections.length > 0) setActiveSectionId(newSections[0].id);
       }
-    } catch (err: any) {
-      console.error(err);
-      if (err.message?.includes('429') || err.message?.includes('Quota')) {
-        alert("⏳ Límite de uso de IA alcanzado. Por favor espera 1 minuto y prueba de nuevo.");
-      } else {
-        alert("Error al analizar el texto. Intenta nuevamente.");
-      }
-    } finally {
-      setIsParsing(false);
+      alert('✅ WOD pegado correctamente');
+    } catch (err) {
+      console.error('Error pasting WOD:', err);
+      alert('❌ Error al pegar el WOD.');
+    }
+  };
+
+  const handleCopySection = (section: WodSection) => {
+    localStorage.setItem('copiedSectionData', JSON.stringify(section));
+    alert('✅ Sección copiada al portapapeles');
+  };
+
+  const handlePasteSection = () => {
+    const savedData = localStorage.getItem('copiedSectionData');
+    if (!savedData) {
+      alert('⚠️ No hay sección copiada para pegar.');
+      return;
+    }
+
+    try {
+      const parsedSection = JSON.parse(savedData);
+      const newSection: WodSection = {
+        ...parsedSection,
+        id: crypto.randomUUID(), // Ensure unique ID
+        title: parsedSection.title || 'Sección Pegada'
+      };
+
+      setSections(prev => [...prev, newSection]);
+      setActiveSectionId(newSection.id);
+      alert('✅ Sección pegada correctamente');
+    } catch (err) {
+      console.error('Error pasting section:', err);
+      alert('❌ Error al pegar la sección.');
     }
   };
 
@@ -362,6 +335,24 @@ const WodModal: React.FC<WodModalProps> = ({ date, wodId, onClose, onSave }) => 
           )}
         </div>
         <div className="flex items-center gap-2">
+          {/* View All Toggle - Only in Fullscreen */}
+          {isFullscreen && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                setViewAllMode(prev => !prev);
+              }}
+              className={`group flex flex-col items-center justify-center transition-colors ${viewAllMode ? 'text-neon-orange' : 'text-white/50 hover:text-neon-orange'}`}
+              title={viewAllMode ? "Ver por Secciones" : "Ver Todo"}
+            >
+              <div className={`border-2 border-dashed border-current rounded-full p-2 transition-all ${viewAllMode ? 'shadow-[0_0_15px_rgba(255,95,31,0.5)]' : 'group-hover:shadow-[0_0_10px_rgba(255,95,31,0.5)]'}`}>
+                {viewAllMode ? <Eye size={24} /> : <EyeOff size={24} />}
+              </div>
+              <span className="text-xs font-bold mt-1">{viewAllMode ? 'TODO' : 'FOCO'}</span>
+            </button>
+          )}
+
           {/* 360 Rotation Button - Toggle 16:9 / 9:16 */}
           {isFullscreen && (
             <button
@@ -397,21 +388,25 @@ const WodModal: React.FC<WodModalProps> = ({ date, wodId, onClose, onSave }) => 
       {/* Body */}
       <div className={`flex-1 overflow-y-auto bg-neutral-900/95 scrollbar-thin scrollbar-thumb-neon-orange/20 relative ${isFullscreen ? 'p-10 flex flex-col items-center' : 'p-4'}`}>
 
-        {isParsing && (
-          <div className="absolute inset-0 bg-black/80 z-20 flex flex-col items-center justify-center p-8 backdrop-blur-sm animate-in fade-in">
-            <div className="animate-spin text-neon-orange mb-4">
-              <Zap size={48} />
-            </div>
-            <h3 className="text-white font-display text-xl uppercase tracking-widest text-center">Analizando Archivo...</h3>
-            <p className="text-gray-400 text-sm mt-2 text-center max-w-sm">La IA está leyendo tu archivo (Foto, PDF o Texto) y organizando las secciones.</p>
-          </div>
-        )}
+
 
         {/* --- PRESENTATION MODE --- */}
         {isFullscreen ? (
           <div
-            className={`mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 transition-all ${isVerticalMode ? 'fixed z-40 overflow-y-auto bg-black p-6' : 'w-full max-w-6xl'}`}
-            style={isVerticalMode ? {
+            className={`mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 transition-all 
+              ${isVerticalMode ? 'fixed z-40 overflow-y-auto bg-black p-6' : 'w-full max-w-6xl'}
+              ${!isVerticalMode && viewAllMode ? 'h-full flex flex-col justify-center' : 'space-y-8'}
+            `}
+            style={(isVerticalMode && !viewAllMode) ? {
+              transform: 'rotate(90deg)',
+              width: '85vh',
+              height: '90vw',
+              top: '50%',
+              left: '50%',
+              marginTop: '-45vw',
+              marginLeft: '-42.5vh',
+              transformOrigin: 'center center'
+            } : isVerticalMode ? {
               transform: 'rotate(90deg)',
               width: '85vh',
               height: '90vw',
@@ -423,26 +418,46 @@ const WodModal: React.FC<WodModalProps> = ({ date, wodId, onClose, onSave }) => 
             } : undefined}
           >
             {/* Main Title */}
-            <div className={`text-center border-b-2 border-neon-orange/30 ${isVerticalMode ? 'pb-4' : 'pb-8'}`}>
-              <h1 className={`font-display text-white tracking-tight uppercase drop-shadow-[0_0_15px_rgba(255,255,255,0.1)] ${isVerticalMode ? 'text-5xl' : 'text-5xl md:text-7xl'}`}>
+            <div className={`text-center border-b-2 border-neon-orange/30 ${isVerticalMode ? 'pb-4' : (!isVerticalMode && viewAllMode) ? 'mb-4 pb-2' : 'pb-8'}`}>
+              <h1 className={`font-display text-white tracking-tight uppercase drop-shadow-[0_0_15px_rgba(255,255,255,0.1)] 
+                ${isVerticalMode ? 'text-5xl' : (!isVerticalMode && viewAllMode) ? 'text-5xl md:text-6xl' : 'text-5xl md:text-7xl'}
+              `}>
                 {title || 'SIN TÍTULO'}
               </h1>
             </div>
 
             {/* Sections Grid */}
-            <div ref={sectionsContainerRef} className={`grid grid-cols-1 ${isVerticalMode ? 'gap-6 pb-20' : 'gap-12 pb-40'}`}>
+            <div ref={sectionsContainerRef} className={`grid 
+              ${isVerticalMode ? 'grid-cols-1 gap-6 pb-20' :
+                (!isVerticalMode && viewAllMode) ? 'grid-cols-2 gap-6 pb-0 overflow-y-auto pr-2' :
+                  'grid-cols-1 gap-12 pb-40'}
+            `}>
               {sections.map((section, index) => {
                 const isFocused = index === focusedSectionIndex;
+                // If viewAllMode is ON, everything is treated as focused/visible
+                const isItemVisible = viewAllMode || isFocused;
+
                 return (
                   <div
                     key={section.id}
                     onClick={() => setFocusedSectionIndex(index)}
-                    className={`space-y-2 ${isVerticalMode ? 'p-4' : 'p-8'} rounded-3xl transition-all duration-500 transform-gpu cursor-pointer border ${isFocused ? 'bg-neon-orange shadow-[0_0_60px_rgba(255,95,31,0.4)] scale-105 z-10 border-neon-orange' : 'opacity-30 scale-95 border-white/5 hover:opacity-50 hover:scale-100'}`}
+                    className={`space-y-2 rounded-3xl transition-all duration-500 transform-gpu cursor-pointer border 
+                      ${isVerticalMode ? 'p-4' : (!isVerticalMode && viewAllMode) ? 'p-5' : 'p-8'}
+                      ${isItemVisible ? 'bg-neon-orange shadow-[0_0_60px_rgba(255,95,31,0.4)] scale-105 z-10 border-neon-orange' : 'opacity-30 scale-95 border-white/5 hover:opacity-50 hover:scale-100'}
+                    `}
                   >
-                    <h3 className={`font-display tracking-widest uppercase border-l-8 ${isVerticalMode ? 'text-2xl pl-4 border-l-4' : 'text-2xl md:text-4xl pl-6'} transition-colors duration-500 ${isFocused ? 'text-white border-white/80' : 'text-neon-orange border-neon-orange'}`}>
+                    <h3 className={`font-display tracking-widest uppercase border-l-8 
+                      ${isVerticalMode ? 'text-2xl pl-4 border-l-4' : (!isVerticalMode && viewAllMode) ? 'text-2xl md:text-3xl pl-4 border-l-4' : 'text-2xl md:text-4xl pl-6'} 
+                      transition-colors duration-500 
+                      ${isItemVisible ? 'text-white border-white/80' : 'text-neon-orange border-neon-orange'}
+                    `}>
                       {section.title}
                     </h3>
-                    <div className={`font-mono leading-relaxed ${isVerticalMode ? 'text-lg pl-4' : 'text-xl md:text-2xl pl-8'} transition-colors duration-500 ${isFocused ? 'text-white font-semibold' : 'text-gray-400'}`}>
+                    <div className={`font-mono leading-relaxed 
+                      ${isVerticalMode ? 'text-lg pl-4' : (!isVerticalMode && viewAllMode) ? 'text-lg md:text-xl pl-4' : 'text-xl md:text-2xl pl-8'} 
+                      transition-colors duration-500 
+                      ${isItemVisible ? 'text-white font-semibold' : 'text-gray-400'}
+                    `}>
                       {section.content.split('\n').map((line, i) => {
                         const trimmed = line.trim();
                         // Remove explanations in parentheses
@@ -501,12 +516,21 @@ const WodModal: React.FC<WodModalProps> = ({ date, wodId, onClose, onSave }) => 
                         placeholder="Nombre de Sección (ej: ENTRADA EN CALOR)"
                       />
                     </div>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); removeSection(section.id); }}
-                      className="text-gray-600 hover:text-red-500 transition-colors p-1"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    <div className="flex gap-1">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleCopySection(section); }}
+                        className="text-gray-600 hover:text-neon-orange transition-colors p-1"
+                        title="Copiar Sección"
+                      >
+                        <Copy size={14} />
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); removeSection(section.id); }}
+                        className="text-gray-600 hover:text-red-500 transition-colors p-1"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </div>
 
                   <textarea
@@ -518,48 +542,29 @@ const WodModal: React.FC<WodModalProps> = ({ date, wodId, onClose, onSave }) => 
                 </div>
               ))}
 
-              <button
-                onClick={addSection}
-                className="flex items-center justify-center gap-2 py-3 border-2 border-dashed border-white/10 rounded-lg text-gray-400 hover:text-white hover:border-white/30 hover:bg-white/5 transition-all group"
-              >
-                <Plus size={20} className="group-hover:scale-110 transition-transform" />
-                <span className="font-bold text-sm uppercase tracking-wider">Agregar Sección</span>
-              </button>
-            </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={addSection}
+                  className="flex items-center justify-center gap-2 py-3 border-2 border-dashed border-white/10 rounded-lg text-gray-400 hover:text-white hover:border-white/30 hover:bg-white/5 transition-all group flex-1"
+                >
+                  <Plus size={20} className="group-hover:scale-110 transition-transform" />
+                  <span className="font-bold text-sm uppercase tracking-wider">Agregar Sección</span>
+                </button>
 
-            {/* Text Import Section */}
-            <div className="mt-8 border-t border-white/10 pt-6">
-              <h3 className="text-neon-orange text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-2">
-                <Zap size={14} /> Importar desde Texto
-              </h3>
-              <div className="bg-black/40 border border-white/10 rounded-lg p-3">
-                <textarea
-                  value={rawText}
-                  onChange={(e) => setRawText(e.target.value)}
-                  placeholder="Pega aquí el texto de tu WOD (ej: desde WhatsApp o Notas)..."
-                  className="w-full bg-transparent text-gray-300 text-sm focus:outline-none resize-none h-20 placeholder-gray-600 font-mono"
-                />
-                <div className="flex justify-end mt-2 pt-2 border-t border-white/5">
-                  <button
-                    onClick={handleTextImport}
-                    disabled={isParsing || !rawText.trim()}
-                    className="flex items-center gap-2 px-4 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-neon-orange border border-neon-orange/30 rounded text-xs font-bold tracking-wider transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isParsing && <Zap size={12} className="animate-spin" />}
-                    ANALIZAR Y GENERAR
-                  </button>
-                </div>
+                <button
+                  onClick={handlePasteSection}
+                  className="flex items-center justify-center gap-2 py-3 border-2 border-dashed border-neon-orange/20 rounded-lg text-neon-orange/70 hover:text-neon-orange hover:border-neon-orange/50 hover:bg-neon-orange/5 transition-all group flex-1"
+                  title="Pegar Sección Copiada"
+                >
+                  <Clipboard size={20} className="group-hover:scale-110 transition-transform" />
+                  <span className="font-bold text-sm uppercase tracking-wider">Pegar Sección</span>
+                </button>
               </div>
             </div>
 
-            {/* Hidden Input for Unified Import */}
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleSmartImport}
-              accept="image/*,.pdf,.txt,.md,.json"
-              className="hidden"
-            />
+
+
+
           </>
         )}
       </div>
@@ -578,15 +583,23 @@ const WodModal: React.FC<WodModalProps> = ({ date, wodId, onClose, onSave }) => 
           ) : <div></div>}
 
           <div className="flex gap-2">
-
             <button
-              onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded hover:bg-blue-500/20 hover:text-blue-300 transition-all text-xs font-bold uppercase tracking-wide group"
-              title="Sube Foto, PDF o Texto y la IA lo estructurará"
+              onClick={handleCopyWod}
+              className="p-2 text-neon-orange hover:bg-neon-orange/10 rounded transition-colors"
+              title="Copiar WOD"
             >
-              <Upload size={14} className="group-hover:scale-110 transition-transform" />
-              <span>Importar con IA (Foto/PDF)</span>
+              <Copy size={18} />
             </button>
+            <button
+              onClick={handlePasteWod}
+              className="p-2 text-neon-orange hover:bg-neon-orange/10 rounded transition-colors"
+              title="Pegar WOD"
+            >
+              <Clipboard size={18} />
+            </button>
+            <div className="w-px bg-neutral-800 mx-1"></div>
+
+
 
             <button
               onClick={handleSave}

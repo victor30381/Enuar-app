@@ -11,7 +11,10 @@ type ModalType = 'none' | 'options' | 'editor';
 
 function AppContent() {
   const { user, loading, signOut } = useAuth();
-  const [rotation, setRotation] = useState(0);
+  const [rotation, setRotation] = useState(() => {
+    const saved = localStorage.getItem('appRotation');
+    return saved ? parseInt(saved, 10) : 0;
+  });
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [currentModal, setCurrentModal] = useState<ModalType>('none');
   const [selectedWodId, setSelectedWodId] = useState<string | undefined>(undefined);
@@ -42,7 +45,11 @@ function AppContent() {
   }, [user, loading]);
 
   const handleRotate = () => {
-    setRotation((prev) => (prev + 90) % 360);
+    setRotation((prev) => {
+      const newRotation = (prev + 90) % 360;
+      localStorage.setItem('appRotation', newRotation.toString());
+      return newRotation;
+    });
   };
 
   const handleDateSelect = (date: Date) => {
@@ -136,9 +143,9 @@ function AppContent() {
           className={`group flex flex-col items-center justify-center bg-transparent transition-colors ${isDarkMode ? 'text-white hover:text-neon-orange' : 'text-gray-700 hover:text-neon-orange'}`}
         >
           <div className="border-2 border-dashed border-current rounded-full p-2 group-hover:neon-box transition-all">
-            <RotateCw size={24} />
+            <RotateCw size={16} />
           </div>
-          <span className="text-xs font-bold mt-1">360°</span>
+          <span className="text-[9px] font-bold mt-1">360°</span>
         </button>
 
         {/* Hamburger Menu */}
@@ -147,7 +154,7 @@ function AppContent() {
             onClick={() => setIsMenuOpen(!isMenuOpen)}
             className={`transition-colors ${isDarkMode ? 'text-white hover:text-neon-orange' : 'text-gray-700 hover:text-neon-orange'}`}
           >
-            {isMenuOpen ? <X size={40} /> : <Menu size={40} />}
+            {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
           </button>
 
           {/* Dropdown Menu */}
@@ -221,13 +228,18 @@ function AppContent() {
         }}
       >
         {/* Header / Logo */}
-        <div className="absolute top-10 left-10 md:left-20 text-left z-20">
+        <div className={`text-left z-20 transition-all duration-500
+          ${isVertical ? 'absolute top-[12%] left-0 w-full flex flex-col items-center' : 'absolute top-10 left-10 md:left-20'}
+        `}>
           <img
             src="logo.png"
             alt="ENUAR W.O.D"
-            className={`w-36 md:w-48 drop-shadow-2xl ${isDarkMode ? 'shadow-black' : ''}`}
+            className={`drop-shadow-2xl ${isVertical ? 'w-32 md:w-36' : 'w-28 md:w-40'} ${isDarkMode ? 'shadow-black' : ''}`}
           />
-          <div className={`font-bold tracking-[0.5em] text-sm md:text-lg ml-1 text-center opacity-80 mt-2 ${isDarkMode ? 'text-white' : 'text-gray-600'}`}>
+          <div className={`font-bold tracking-[0.5em] ml-1 text-center opacity-80 mt-2 
+            ${isVertical ? 'text-sm md:text-base' : 'text-sm md:text-lg block'} 
+            ${isDarkMode ? 'text-white' : 'text-gray-600'}
+          `}>
             W.O.D
           </div>
         </div>
@@ -262,6 +274,8 @@ function AppContent() {
                 onClose={handleCloseModal}
                 onNewWod={handleNewWod}
                 onEditWod={handleEditWod}
+                isDarkMode={isDarkMode}
+                isVertical={isVertical}
               />
             )}
             {currentModal === 'editor' && (
@@ -270,6 +284,8 @@ function AppContent() {
                 wodId={selectedWodId}
                 onClose={handleCloseModal}
                 onSave={handleSaveWod}
+                isDarkMode={isDarkMode}
+                isVertical={isVertical}
               />
             )}
           </div>

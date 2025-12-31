@@ -97,17 +97,17 @@ const Calendar: React.FC<CalendarProps> = ({ onDateSelect, isDarkMode = true, is
   }, [displayMonth, displayYear, wods]);
 
   return (
-    <div className={`w-full mx-auto transition-all duration-300 ${isVertical ? 'max-w-sm' : 'max-w-lg'}`}>
+    <div className={`w-full mx-auto transition-all duration-300 ${isVertical ? 'max-w-md' : 'max-w-lg'}`}>
       {/* Month Header with Navigation */}
-      <div className={`flex items-center justify-center gap-4 ${isVertical ? 'mb-2' : 'mb-4'}`}>
+      <div className={`flex items-center justify-center gap-4 ${isVertical ? 'mb-4' : 'mb-4'}`}>
         <button
           onClick={goToPrevMonth}
           className={`hover:text-neon-orange hover:scale-125 transition-all p-1 ${isDarkMode ? 'text-white/50' : 'text-gray-400'}`}
           title="Mes anterior"
         >
-          <ChevronLeft size={isVertical ? 24 : 32} />
+          <ChevronLeft size={isVertical ? 28 : 32} />
         </button>
-        <h2 className={`${isVertical ? 'text-2xl' : 'text-3xl md:text-4xl'} font-display text-center tracking-widest drop-shadow-[0_0_25px_rgba(255,95,31,0.8)] relative ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+        <h2 className={`${isVertical ? 'text-3xl' : 'text-3xl md:text-4xl'} font-display text-center tracking-widest drop-shadow-[0_0_25px_rgba(255,95,31,0.8)] relative ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
           <span className="absolute inset-0 blur-xl bg-neon-orange/20 rounded-full"></span>
           <span className="relative">{monthName}</span>
           <span className="block text-sm text-neon-orange/60 mt-0.5">{displayYear}</span>
@@ -117,7 +117,7 @@ const Calendar: React.FC<CalendarProps> = ({ onDateSelect, isDarkMode = true, is
           className={`hover:text-neon-orange hover:scale-125 transition-all p-1 ${isDarkMode ? 'text-white/50' : 'text-gray-400'}`}
           title="Mes siguiente"
         >
-          <ChevronRight size={isVertical ? 24 : 32} />
+          <ChevronRight size={isVertical ? 28 : 32} />
         </button>
       </div>
 
@@ -129,7 +129,7 @@ const Calendar: React.FC<CalendarProps> = ({ onDateSelect, isDarkMode = true, is
 
       <div className="grid grid-cols-7 gap-1 mb-1">
         {['D', 'L', 'M', 'M', 'J', 'V', 'S'].map((d, i) => (
-          <div key={i} className={`text-center text-gray-500 font-bold ${isVertical ? 'text-[10px]' : 'text-xs'}`}>{d}</div>
+          <div key={i} className={`text-center text-gray-500 font-bold ${isVertical ? 'text-xs' : 'text-xs'}`}>{d}</div>
         ))}
       </div>
 
@@ -144,7 +144,7 @@ const Calendar: React.FC<CalendarProps> = ({ onDateSelect, isDarkMode = true, is
               ${isDarkMode ? 'border-white/20' : 'border-gray-200'}
               ${!day.isCurrentMonth ? 'text-gray-400 pointer-events-none' : isDarkMode ? 'text-white hover:text-neon-orange hover:bg-white/5 cursor-pointer' : 'text-gray-800 hover:text-neon-orange hover:bg-orange-50 cursor-pointer'}
               ${day.isToday ? 'border-2 border-neon-orange neon-box bg-neon-orange/10 z-10' : ''}
-              ${isVertical ? 'text-sm' : 'text-base md:text-lg'}
+              ${isVertical ? 'text-base' : 'text-base md:text-lg'}
             `}
           >
             {day.date.getDate()}

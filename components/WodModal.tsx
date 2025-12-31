@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Save, Trash2, Upload, Type, Plus, Maximize2, Minimize2, Image as ImageIcon, Zap, RotateCw, Copy, Clipboard, Eye, EyeOff } from 'lucide-react';
+import { X, Save, Trash2, Upload, Type, Plus, Maximize2, Minimize2, Image as ImageIcon, Zap, RotateCw, Copy, Clipboard, Eye, EyeOff, ChevronDown } from 'lucide-react';
 import { WodEntry, WodSection } from '../types';
 import { saveWod, getWodById, deleteWod } from '../services/storageService';
 
@@ -10,9 +10,11 @@ interface WodModalProps {
   wodId?: string;
   onClose: () => void;
   onSave: () => void;
+  isDarkMode: boolean;
+  isVertical: boolean;
 }
 
-const WodModal: React.FC<WodModalProps> = ({ date, wodId, onClose, onSave }) => {
+const WodModal: React.FC<WodModalProps> = ({ date, wodId, onClose, onSave, isDarkMode, isVertical }) => {
   const dateIso = date.toISOString().split('T')[0];
   const [title, setTitle] = useState('');
   // Start with empty sections list to follow "only add button" request
@@ -22,8 +24,9 @@ const WodModal: React.FC<WodModalProps> = ({ date, wodId, onClose, onSave }) => 
 
 
   const [focusedSectionIndex, setFocusedSectionIndex] = useState(0);
-  const [isVerticalMode, setIsVerticalMode] = useState(false); // false = 16:9, true = 9:16
+  const [isVerticalMode, setIsVerticalMode] = useState(isVertical);
   const [viewAllMode, setViewAllMode] = useState(false);
+  const [showControls, setShowControls] = useState(true);
 
   const sectionsContainerRef = useRef<HTMLDivElement>(null);
   const modalContainerRef = useRef<HTMLDivElement>(null);
@@ -35,14 +38,14 @@ const WodModal: React.FC<WodModalProps> = ({ date, wodId, onClose, onSave }) => 
   useEffect(() => {
     const container = document.createElement('div');
     container.id = 'wod-fullscreen-container';
-    container.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999; display: none; background: black;';
+    container.style.cssText = `position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999; display: none; background: ${isDarkMode ? 'black' : 'white'};`;
     document.body.appendChild(container);
     fullscreenContainerRef.current = container;
 
     return () => {
       container.remove();
     };
-  }, []);
+  }, [isDarkMode]);
 
   // Toggle true browser fullscreen
   const toggleFullscreen = async () => {
@@ -310,17 +313,23 @@ const WodModal: React.FC<WodModalProps> = ({ date, wodId, onClose, onSave }) => 
   const modalContent = (
     <div
       ref={modalContainerRef}
-      className={`bg-neutral-900 border border-neon-orange rounded-xl shadow-[0_0_40px_rgba(255,95,31,0.25)] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200 transition-all
-            ${isFullscreen ? 'fixed inset-0 z-[9999] w-screen h-screen rounded-none' : 'w-[90vw] max-w-3xl h-[85vh]'}
+      className={`border rounded-xl shadow-[0_0_40px_rgba(255,95,31,0.25)] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200 transition-all
+            ${isFullscreen ? 'fixed inset-0 z-[9999] w-screen h-screen rounded-none' : isVertical ? 'w-[90vh] max-w-[90vh] h-[90vw]' : 'w-[90vw] max-w-3xl h-[85vh]'}
+            ${isDarkMode ? 'bg-neutral-900 border-neon-orange' : 'bg-white border-orange-300'}
         `}
     >
 
       {/* Header - z-50 ensures it stays above rotated content in presentation mode */}
-      <div className={`px-5 py-3 border-b border-neutral-800 flex justify-between items-center bg-wood-800 shrink-0 ${isFullscreen ? 'bg-black border-none z-50 relative' : ''}`}>
+      <div
+        onMouseLeave={() => { if (isFullscreen) setShowControls(false); }}
+        className={`px-5 py-3 border-b flex justify-between items-center shrink-0 transition-all duration-300 ease-in-out
+        ${isFullscreen ? `border-none z-50 fixed top-0 left-0 w-full ${isDarkMode ? 'bg-black' : 'bg-white'}` : `relative ${isDarkMode ? 'bg-wood-800 border-neutral-800' : 'bg-orange-50 border-orange-100'}`}
+        ${isFullscreen && !showControls ? '-translate-y-full opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'}
+      `}>
         <div className="flex items-center gap-2">
           {!isFullscreen && (
             <>
-              <h2 className="text-xl font-display text-white uppercase tracking-wider flex items-center gap-2">
+              <h2 className={`text-xl font-display uppercase tracking-wider flex items-center gap-2 ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
                 {wodId ? 'EDITAR WOD' : 'NUEVO WOD'}
               </h2>
               <span className="text-xs bg-neutral-800 px-2 py-0.5 rounded text-gray-400 font-mono">
@@ -343,7 +352,7 @@ const WodModal: React.FC<WodModalProps> = ({ date, wodId, onClose, onSave }) => 
                 e.preventDefault();
                 setViewAllMode(prev => !prev);
               }}
-              className={`group flex flex-col items-center justify-center transition-colors ${viewAllMode ? 'text-neon-orange' : 'text-white/50 hover:text-neon-orange'}`}
+              className={`group flex flex-col items-center justify-center transition-colors ${viewAllMode ? 'text-neon-orange' : isDarkMode ? 'text-white/50 hover:text-neon-orange' : 'text-gray-400 hover:text-neon-orange'}`}
               title={viewAllMode ? "Ver por Secciones" : "Ver Todo"}
             >
               <div className={`border-2 border-dashed border-current rounded-full p-2 transition-all ${viewAllMode ? 'shadow-[0_0_15px_rgba(255,95,31,0.5)]' : 'group-hover:shadow-[0_0_10px_rgba(255,95,31,0.5)]'}`}>
@@ -359,9 +368,13 @@ const WodModal: React.FC<WodModalProps> = ({ date, wodId, onClose, onSave }) => 
               onClick={(e) => {
                 e.stopPropagation();
                 e.preventDefault();
-                setIsVerticalMode(prev => !prev);
+                setIsVerticalMode(prev => {
+                  const newValue = !prev;
+                  localStorage.setItem('wodIsVerticalMode', JSON.stringify(newValue));
+                  return newValue;
+                });
               }}
-              className={`group flex flex-col items-center justify-center transition-colors ${isVerticalMode ? 'text-neon-orange' : 'text-white/50 hover:text-neon-orange'}`}
+              className={`group flex flex-col items-center justify-center transition-colors ${isVerticalMode ? 'text-neon-orange' : isDarkMode ? 'text-white/50 hover:text-neon-orange' : 'text-gray-400 hover:text-neon-orange'}`}
               title={isVerticalMode ? "Cambiar a 16:9 (Horizontal)" : "Cambiar a 9:16 (Vertical)"}
             >
               <div className={`border-2 border-dashed border-current rounded-full p-2 transition-all ${isVerticalMode ? 'shadow-[0_0_15px_rgba(255,95,31,0.5)]' : 'group-hover:shadow-[0_0_10px_rgba(255,95,31,0.5)]'}`}>
@@ -372,7 +385,7 @@ const WodModal: React.FC<WodModalProps> = ({ date, wodId, onClose, onSave }) => 
           )}
           <button
             onClick={toggleFullscreen}
-            className={`text-gray-500 hover:text-neon-orange transition-colors p-1 ${isFullscreen ? 'text-white/50 hover:text-white hover:scale-110' : ''}`}
+            className={`text-gray-500 hover:text-neon-orange transition-colors p-1 ${isFullscreen ? (isDarkMode ? 'text-white/50 hover:text-white hover:scale-110' : 'text-gray-400 hover:text-gray-800 hover:scale-110') : ''}`}
             title={isFullscreen ? "Salir de Modo Presentación" : "Modo Presentación"}
           >
             {isFullscreen ? <Minimize2 size={32} /> : <Maximize2 size={20} />}
@@ -383,10 +396,23 @@ const WodModal: React.FC<WodModalProps> = ({ date, wodId, onClose, onSave }) => 
             </button>
           )}
         </div>
+
       </div>
 
+      {/* Trigger Tab for Vertical Mode Controls */}
+      {isFullscreen && !showControls && (
+        <div
+          className="fixed top-0 left-1/2 -translate-x-1/2 z-[10000] bg-black/50 hover:bg-neon-orange text-neon-orange hover:text-black px-8 py-1 rounded-b-xl cursor-pointer transition-all backdrop-blur-sm border-b border-x border-neon-orange/30 shadow-[0_4px_20px_rgba(0,0,0,0.5)] animate-in fade-in slide-in-from-top-2"
+          onMouseEnter={() => setShowControls(true)}
+          onClick={() => setShowControls(true)}
+          title="Mostrar controles"
+        >
+          <ChevronDown size={28} />
+        </div>
+      )}
+
       {/* Body */}
-      <div className={`flex-1 overflow-y-auto bg-neutral-900/95 scrollbar-thin scrollbar-thumb-neon-orange/20 relative ${isFullscreen ? 'p-10 flex flex-col items-center' : 'p-4'}`}>
+      <div className={`flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-neon-orange/20 relative ${isFullscreen ? 'p-10 flex flex-col items-center' : 'p-4'} ${isDarkMode ? 'bg-neutral-900/95' : 'bg-white'}`}>
 
 
 
@@ -394,33 +420,34 @@ const WodModal: React.FC<WodModalProps> = ({ date, wodId, onClose, onSave }) => 
         {isFullscreen ? (
           <div
             className={`mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 transition-all 
-              ${isVerticalMode ? 'fixed z-40 overflow-y-auto bg-black p-6' : 'w-full max-w-6xl'}
+              ${isVerticalMode ? `fixed z-40 overflow-y-auto p-6 ${isDarkMode ? 'bg-black' : 'bg-white'}` : 'w-full max-w-6xl'}
               ${!isVerticalMode && viewAllMode ? 'h-full flex flex-col justify-center' : 'space-y-8'}
             `}
             style={(isVerticalMode && !viewAllMode) ? {
               transform: 'rotate(90deg)',
-              width: '85vh',
-              height: '90vw',
+              width: '100vh',
+              height: '100vw',
               top: '50%',
               left: '50%',
-              marginTop: '-45vw',
-              marginLeft: '-42.5vh',
+              marginTop: '-50vw',
+              marginLeft: '-50vh',
               transformOrigin: 'center center'
             } : isVerticalMode ? {
               transform: 'rotate(90deg)',
-              width: '85vh',
-              height: '90vw',
+              width: '100vh',
+              height: '100vw',
               top: '50%',
               left: '50%',
-              marginTop: '-45vw',
-              marginLeft: '-42.5vh',
+              marginTop: '-50vw',
+              marginLeft: '-50vh',
               transformOrigin: 'center center'
             } : undefined}
           >
             {/* Main Title */}
             <div className={`text-center border-b-2 border-neon-orange/30 ${isVerticalMode ? 'pb-4' : (!isVerticalMode && viewAllMode) ? 'mb-4 pb-2' : 'pb-8'}`}>
-              <h1 className={`font-display text-white tracking-tight uppercase drop-shadow-[0_0_15px_rgba(255,255,255,0.1)] 
-                ${isVerticalMode ? 'text-5xl' : (!isVerticalMode && viewAllMode) ? 'text-5xl md:text-6xl' : 'text-5xl md:text-7xl'}
+              <h1 className={`font-display tracking-tight uppercase drop-shadow-[0_0_15px_rgba(255,255,255,0.1)] 
+                ${isVerticalMode ? 'text-7xl' : (!isVerticalMode && viewAllMode) ? 'text-5xl md:text-6xl' : 'text-5xl md:text-7xl'}
+                ${isDarkMode ? 'text-white' : 'text-black'}
               `}>
                 {title || 'SIN TÍTULO'}
               </h1>
@@ -443,20 +470,27 @@ const WodModal: React.FC<WodModalProps> = ({ date, wodId, onClose, onSave }) => 
                     onClick={() => setFocusedSectionIndex(index)}
                     className={`space-y-2 rounded-3xl transition-all duration-500 transform-gpu cursor-pointer border 
                       ${isVerticalMode ? 'p-4' : (!isVerticalMode && viewAllMode) ? 'p-5' : 'p-8'}
-                      ${isItemVisible ? 'bg-neon-orange shadow-[0_0_60px_rgba(255,95,31,0.4)] scale-105 z-10 border-neon-orange' : 'opacity-30 scale-95 border-white/5 hover:opacity-50 hover:scale-100'}
+                      ${isItemVisible
+                        ? 'bg-neon-orange shadow-[0_0_60px_rgba(255,95,31,0.4)] scale-105 z-10 border-neon-orange'
+                        : `opacity-30 scale-95 hover:opacity-50 hover:scale-100 ${isDarkMode ? 'border-white/5' : 'border-black/5'}`
+                      }
                     `}
                   >
                     <h3 className={`font-display tracking-widest uppercase border-l-8 
-                      ${isVerticalMode ? 'text-2xl pl-4 border-l-4' : (!isVerticalMode && viewAllMode) ? 'text-2xl md:text-3xl pl-4 border-l-4' : 'text-2xl md:text-4xl pl-6'} 
+                      ${isVerticalMode ? 'text-4xl pl-6 border-l-8' : (!isVerticalMode && viewAllMode) ? 'text-2xl md:text-3xl pl-4 border-l-4' : 'text-2xl md:text-4xl pl-6'} 
                       transition-colors duration-500 
-                      ${isItemVisible ? 'text-white border-white/80' : 'text-neon-orange border-neon-orange'}
+                      ${isItemVisible
+                        ? 'text-white border-white/80'
+                        : isDarkMode ? 'text-neon-orange border-neon-orange' : 'text-orange-600 border-orange-400'}
                     `}>
                       {section.title}
                     </h3>
                     <div className={`font-mono leading-relaxed 
-                      ${isVerticalMode ? 'text-lg pl-4' : (!isVerticalMode && viewAllMode) ? 'text-lg md:text-xl pl-4' : 'text-xl md:text-2xl pl-8'} 
+                      ${isVerticalMode ? 'text-2xl pl-6' : (!isVerticalMode && viewAllMode) ? 'text-lg md:text-xl pl-4' : 'text-xl md:text-2xl pl-8'} 
                       transition-colors duration-500 
-                      ${isItemVisible ? 'text-white font-semibold' : 'text-gray-400'}
+                      ${isItemVisible
+                        ? 'text-white font-semibold'
+                        : isDarkMode ? 'text-gray-400' : 'text-gray-600'}
                     `}>
                       {section.content.split('\n').map((line, i) => {
                         const trimmed = line.trim();
@@ -465,8 +499,8 @@ const WodModal: React.FC<WodModalProps> = ({ date, wodId, onClose, onSave }) => 
                         if (!cleanLine) return null; // Skip empty lines after cleaning
                         if (cleanLine.startsWith('-')) {
                           return (
-                            <div key={i} className={`flex items-start ${isVerticalMode ? 'gap-2' : 'gap-4'} mb-1`}>
-                              <span className={`font-bold shrink-0 ${isVerticalMode ? 'text-lg' : 'text-2xl min-w-[20px] mt-1'} ${isFocused ? 'text-white' : 'text-neon-orange'}`}>-</span>
+                            <div key={i} className={`flex items-start ${isVerticalMode ? 'gap-3' : 'gap-4'} mb-1`}>
+                              <span className={`font-bold shrink-0 ${isVerticalMode ? 'text-2xl min-w-[20px]' : 'text-2xl min-w-[20px] mt-1'} ${isFocused ? 'text-white' : 'text-neon-orange'}`}>-</span>
                               <span>{cleanLine.substring(1).trim()}</span>
                             </div>
                           );
@@ -485,13 +519,17 @@ const WodModal: React.FC<WodModalProps> = ({ date, wodId, onClose, onSave }) => 
             {/* Main Title Input */}
             <div className="mb-6">
               <label className="text-xs text-neon-orange font-bold uppercase tracking-wider mb-2 block">Nombre del Entrenamiento</label>
-              <div className="flex items-center gap-2 bg-black/40 border border-neutral-700 rounded-lg px-3 py-2 focus-within:border-neon-orange focus-within:ring-1 focus-within:ring-neon-orange/50">
+              <div className={`flex items-center gap-2 border rounded-lg px-3 py-2 focus-within:border-neon-orange focus-within:ring-1 focus-within:ring-neon-orange/50 transition-colors
+                ${isDarkMode ? 'bg-black/40 border-neutral-700' : 'bg-gray-50 border-gray-200'}
+              `}>
                 <Type size={18} className="text-gray-500" />
                 <input
                   type="text"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  className="bg-transparent border-none text-white w-full focus:outline-none font-display tracking-wide placeholder-gray-600 text-lg"
+                  className={`bg-transparent border-none w-full focus:outline-none font-display tracking-wide text-lg
+                    ${isDarkMode ? 'text-white placeholder-gray-600' : 'text-gray-900 placeholder-gray-400'}
+                  `}
                   placeholder="Título general del WOD..."
                 />
               </div>
@@ -502,7 +540,12 @@ const WodModal: React.FC<WodModalProps> = ({ date, wodId, onClose, onSave }) => 
               {sections.map((section, index) => (
                 <div
                   key={section.id}
-                  className={`bg-white/5 border rounded-lg p-3 transition-all duration-300 ${activeSectionId === section.id ? 'border-neon-orange/50 bg-white/10' : 'border-white/10'}`}
+                  className={`border rounded-lg p-3 transition-all duration-300 
+                    ${activeSectionId === section.id
+                      ? `border-neon-orange/50 ${isDarkMode ? 'bg-white/10' : 'bg-orange-50'}`
+                      : `${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-white border-gray-200'}`
+                    }
+                  `}
                   onClick={() => setActiveSectionId(section.id)}
                 >
                   <div className="flex justify-between items-center mb-2">
@@ -536,7 +579,12 @@ const WodModal: React.FC<WodModalProps> = ({ date, wodId, onClose, onSave }) => 
                   <textarea
                     value={section.content}
                     onChange={(e) => updateSection(section.id, 'content', e.target.value)}
-                    className="w-full h-24 bg-black/40 border border-neutral-800 rounded p-2 text-white placeholder-gray-600 focus:border-neon-orange/30 focus:ring-0 outline-none resize-none font-mono text-sm leading-relaxed scrollbar-thin scrollbar-thumb-neon-orange/10"
+                    className={`w-full h-24 border rounded p-2 focus:border-neon-orange/30 focus:ring-0 outline-none resize-none font-mono text-sm leading-relaxed scrollbar-thin scrollbar-thumb-neon-orange/10
+                      ${isDarkMode
+                        ? 'bg-black/40 border-neutral-800 text-white placeholder-gray-600'
+                        : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400'
+                      }
+                    `}
                     placeholder="Describe los ejercicios de esta sección..."
                   />
                 </div>
@@ -571,7 +619,9 @@ const WodModal: React.FC<WodModalProps> = ({ date, wodId, onClose, onSave }) => 
 
       {/* Footer - HIDE in Fullscreen */}
       {!isFullscreen && (
-        <div className="px-4 py-3 border-t border-neutral-800 flex justify-between items-center bg-wood-900/50 gap-2 shrink-0 flex-wrap">
+        <div className={`px-4 py-3 border-t flex justify-between items-center gap-2 shrink-0 flex-wrap transition-colors
+          ${isDarkMode ? 'bg-wood-900/50 border-neutral-800' : 'bg-orange-50 border-orange-100'}
+        `}>
           {wodId ? (
             <button
               onClick={handleDelete}
